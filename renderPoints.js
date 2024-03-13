@@ -43,11 +43,11 @@ function parseOBJToVertices(objText) {
 }
 
 // render the scene
-function drawScene(gl, shaderProgram, vertexCount) {
-    gl.clearColor(0.0, 0.0, 0.0, 1.0);  
-    gl.clearDepth(1.0);                 
-    gl.enable(gl.DEPTH_TEST);           
-    gl.depthFunc(gl.LEQUAL);            
+function drawScene(gl, shaderProgram, vertexCount, lightPosition) {
+    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+    gl.clearDepth(1.0);
+    gl.enable(gl.DEPTH_TEST);
+    gl.depthFunc(gl.LEQUAL);
 
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
@@ -56,6 +56,9 @@ function drawScene(gl, shaderProgram, vertexCount) {
     const positionAttributeLocation = gl.getAttribLocation(shaderProgram, 'aVertexPosition');
     gl.enableVertexAttribArray(positionAttributeLocation);
     gl.vertexAttribPointer(positionAttributeLocation, 3, gl.FLOAT, false, 0, 0);
+
+    const lightPositionLocation = gl.getUniformLocation(shaderProgram, 'uLightPosition');
+    gl.uniform3fv(lightPositionLocation, lightPosition);
 
     gl.drawArrays(gl.POINTS, 0, vertexCount);
 }
@@ -69,32 +72,38 @@ function main() {
         return;
     }
 
-    // Vertex shader program
+    // Vertex shader
     const vsSource = `
         attribute vec4 aVertexPosition;
+        varying vec3 vVertexPosition;
         void main() {
             gl_Position = aVertexPosition;
+            vVertexPosition = aVertexPosition.xyz;
             gl_PointSize = 5.0;
         }
     `;
 
-    // Fragment shader program
+    // Fragment shader
     const fsSource = `
         precision mediump float;
+        varying vec3 vVertexPosition;
+        uniform vec3 uLightPosition;
         void main() {
-            gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
+            vec3 lightDirection = normalize(uLightPosition - vVertexPosition);
+            float brightness = dot(normalize(vVertexPosition), lightDirection);
+            gl_FragColor = vec4(brightness, brightness, brightness, 1.0);
         }
     `;
 
     const shaderProgram = initShaderProgram(gl, vsSource, fsSource);
 
-    document.getElementById('fileInput').addEventListener('change', function(event) {
+    document.getElementById('fileInput').addEventListener('change', function (event) {
         const file = event.target.files[0];
         if (!file) {
             return;
         }
         const reader = new FileReader();
-        reader.onload = function(e) {
+        reader.onload = function (e) {
             const contents = e.target.result;
             const vertices = parseOBJToVertices(contents);
 
@@ -102,7 +111,10 @@ function main() {
             gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
             gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
 
-            drawScene(gl, shaderProgram, vertices.length / 3); 
+            // Adds a single light to the scene, this keeps the screen from being black
+            const lightPosition = [1.0, 1.0, 1.0];
+
+            drawScene(gl, shaderProgram, vertices.length / 3, lightPosition);
         };
         reader.readAsText(file);
     });
