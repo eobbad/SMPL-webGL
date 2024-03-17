@@ -12,7 +12,6 @@ function compileShader(gl, source, type) {
     return shader;
 }
 
-// initialize and link the shader program
 function initShaderProgram(gl, vsSource, fsSource) {
     const vertexShader = compileShader(gl, vsSource, gl.VERTEX_SHADER);
     const fragmentShader = compileShader(gl, fsSource, gl.FRAGMENT_SHADER);
@@ -29,7 +28,6 @@ function initShaderProgram(gl, vsSource, fsSource) {
     return shaderProgram;
 }
 
-// parse OBJ file text and extract vertices and normals
 function parseOBJToVerticesAndNormals(objText) {
     const vertices = [];
     const normals = [];
@@ -46,8 +44,7 @@ function parseOBJToVerticesAndNormals(objText) {
     return { vertices, normals };
 }
 
-// render the scene with normals
-function drawSceneWithNormals(gl, shaderProgram, vertexCount, lightPosition, positionBuffer, normalBuffer) {
+function drawSceneWithNormals(gl, shaderProgram, vertexCount, lightPosition, positionBuffer, normalBuffer, lightIntensity) {
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
     gl.clearDepth(1.0);
     gl.enable(gl.DEPTH_TEST);
@@ -70,6 +67,9 @@ function drawSceneWithNormals(gl, shaderProgram, vertexCount, lightPosition, pos
     const lightPositionLocation = gl.getUniformLocation(shaderProgram, 'uLightPosition');
     gl.uniform3fv(lightPositionLocation, lightPosition);
 
+    const lightIntensityLocation = gl.getUniformLocation(shaderProgram, 'uLightIntensity');
+    gl.uniform1f(lightIntensityLocation, lightIntensity);
+
     gl.drawArrays(gl.POINTS, 0, vertexCount);
 }
 
@@ -82,7 +82,11 @@ function main() {
         return;
     }
 
-    // Vertex shader
+    let vertices; // Declare vertices array
+    let positionBuffer; // Declare positionBuffer globally
+    let normalBuffer; // Declare normalBuffer globally
+    let lightIntensity; // Declare lightIntensity globally
+
     const vsSource = `
         attribute vec4 aVertexPosition;
         attribute vec3 aVertexNormal;
@@ -96,22 +100,38 @@ function main() {
         }
     `;
 
-    // Fragment shader
     const fsSource = `
         precision mediump float;
         varying vec3 vVertexPosition;
         varying vec3 vNormal;
         uniform vec3 uLightPosition;
+        uniform float uLightIntensity;
         void main() {
             vec3 lightDirection = normalize(uLightPosition - vVertexPosition);
-            float brightness = max(dot(normalize(vNormal), lightDirection), 0.0); // Clamp to positive values only
-            // Calculate gray color based on Lambertian reflectance
-            vec3 color = vec3(brightness);
+            float brightness = max(dot(normalize(vNormal), lightDirection), 0.0);
+            vec3 color = vec3(brightness) * uLightIntensity;
             gl_FragColor = vec4(color, 1.0);
         }
     `;
 
     const shaderProgram = initShaderProgram(gl, vsSource, fsSource);
+
+    // Get sliders for light position
+    const lightXSlider = document.getElementById('lightX');
+    const lightYSlider = document.getElementById('lightY');
+    const lightZSlider = document.getElementById('lightZ');
+
+    // Update light position when sliders are changed
+    function updateLightPosition() {
+        const lightX = parseFloat(lightXSlider.value);
+        const lightY = parseFloat(lightYSlider.value);
+        const lightZ = parseFloat(lightZSlider.value);
+        drawSceneWithNormals(gl, shaderProgram, vertices.length / 3, [lightX, lightY, lightZ], positionBuffer, normalBuffer, lightIntensity);
+    }
+
+    lightXSlider.addEventListener('input', updateLightPosition);
+    lightYSlider.addEventListener('input', updateLightPosition);
+    lightZSlider.addEventListener('input', updateLightPosition);
 
     document.getElementById('fileInput').addEventListener('change', function (event) {
         const file = event.target.files[0];
@@ -121,17 +141,21 @@ function main() {
         const reader = new FileReader();
         reader.onload = function (e) {
             const contents = e.target.result;
-            const { vertices, normals } = parseOBJToVerticesAndNormals(contents);
+            const { vertices: parsedVertices, normals } = parseOBJToVerticesAndNormals(contents);
 
-            const positionBuffer = gl.createBuffer();
+            vertices = parsedVertices; // Assign vertices array from parsed data
+
+            positionBuffer = gl.createBuffer(); // Initialize positionBuffer
             gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
             gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
 
-            const normalBuffer = gl.createBuffer();
+            normalBuffer = gl.createBuffer(); // Initialize normalBuffer
             gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
             gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normals), gl.STATIC_DRAW);
 
-            drawSceneWithNormals(gl, shaderProgram, vertices.length / 3, [1.0, 1.0, 1.0], positionBuffer, normalBuffer);
+            lightIntensity = 1.0; // Initialize lightIntensity
+
+            drawSceneWithNormals(gl, shaderProgram, vertices.length / 3, [1.0, 1.0, -2.0], positionBuffer, normalBuffer, lightIntensity);
         };
         reader.readAsText(file);
     });
