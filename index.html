@@ -10,6 +10,14 @@
 <body>
     <input type="file" id="fileInput" accept=".obj">
     <canvas id="webgl-canvas"></canvas>
+    <div>
+        <label for="lightX">Light X:</label>
+        <input type="range" id="lightX" min="-10" max="10" value="1">
+        <label for="lightY">Light Y:</label>
+        <input type="range" id="lightY" min="-10" max="10" value="1">
+        <label for="lightZ">Light Z:</label>
+        <input type="range" id="lightZ" min="-10" max="10" value="-2">
+    </div>
     <script src="renderPoints.js"></script>
 </body>
 </html>
